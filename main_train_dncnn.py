@@ -108,6 +108,9 @@ def main(json_path='options/train_dncnn.json'):
     # 1) create_dataset
     # 2) creat_dataloader for train and test
     # ----------------------------------------
+
+    samplesDir = None
+
     dataset_type = opt['datasets']['train']['dataset_type']
     for phase, dataset_opt in opt['datasets'].items():
         if phase == 'train':
@@ -125,9 +128,26 @@ def main(json_path='options/train_dncnn.json'):
             test_loader = DataLoader(test_set, batch_size=1,
                                      shuffle=False, num_workers=1,
                                      drop_last=False, pin_memory=True)
+        elif phase == 'samples':
+            samplesDir = dataset_opt['root']
         else:
             raise NotImplementedError("Phase [%s] is not recognized." % phase)
 
+    device = torch.device('cuda')
+    sampleImages = None
+    if samplesDir is not None:
+        sampleImages = []
+        samplePaths = util.get_image_paths(samplesDir)
+        for idx, img in enumerate(samplePaths):
+            img_name, ext = os.path.splitext(os.path.basename(img))
+            img_L = util.imread_uint(img, n_channels=3)
+            img_L = util.uint2single(img_L)
+            img_L = util.single2tensor4(img_L)
+            img_L = img_L.to(device)
+            sampleImages.append({
+                "name": img_name,
+                "handle": img_L
+            })
     '''
     # ----------------------------------------
     # Step--3 (initialize model)
@@ -151,6 +171,7 @@ def main(json_path='options/train_dncnn.json'):
     '''
 
     for epoch in range(1000000):  # keep running
+        # logger.info('epoch {}'.format(epoch))
         for i, train_data in enumerate(train_loader):
 
             current_step += 1
@@ -202,6 +223,25 @@ def main(json_path='options/train_dncnn.json'):
             # 6) testing
             # -------------------------------
             if current_step % opt['train']['checkpoint_test'] == 0:
+
+                idx = 0
+
+                logger.info('{:->4d}--> {:>10s}'.format(0, "Samples"))
+
+                for sampleImage in sampleImages:
+                    idx += 1
+
+                    estimateImage = model.netG(sampleImage["handle"])
+                    estimateImage = util.tensor2uint(estimateImage)
+                    imageDir = os.path.join(opt['path']['images'], "_samples", sampleImage["name"])
+                    util.mkdir(imageDir)
+
+                    save_img_path = os.path.join(imageDir, '{:s}_{:d}.png'.format(sampleImage["name"], current_step))
+                    util.imsave(estimateImage, save_img_path)
+
+                    logger.info('{:->4d}--> {:>10s}.png'.format(idx, sampleImage["name"]))
+
+                logger.info('{:->4d}--> {:>10s}'.format(0, "Testing"))
 
                 avg_psnr = 0.0
                 idx = 0

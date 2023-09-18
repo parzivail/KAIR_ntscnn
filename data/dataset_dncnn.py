@@ -30,6 +30,7 @@ class DatasetDnCNN(data.Dataset):
         # return None if input is None
         # ------------------------------------
         self.paths_H = util.get_image_paths(opt['dataroot_H'])
+        self.paths_L = util.get_image_paths(opt['dataroot_L'])
 
     def __getitem__(self, index):
 
@@ -38,8 +39,8 @@ class DatasetDnCNN(data.Dataset):
         # ------------------------------------
         H_path = self.paths_H[index]
         img_H = util.imread_uint(H_path, self.n_channels)
-
-        L_path = H_path
+        L_path = self.paths_L[index]
+        img_L = util.imread_uint(L_path, self.n_channels)
 
         if self.opt['phase'] == 'train':
             """
@@ -47,32 +48,38 @@ class DatasetDnCNN(data.Dataset):
             # get L/H patch pairs
             # --------------------------------
             """
-            H, W, _ = img_H.shape
+            # H, W, _ = img_H.shape
+
+            # Limit patch to within image area to prevent overfitting metadata border
+            H = 414
+            W = 583
+            dX = 129
+            dY = 32
 
             # --------------------------------
             # randomly crop the patch
             # --------------------------------
-            rnd_h = random.randint(0, max(0, H - self.patch_size))
-            rnd_w = random.randint(0, max(0, W - self.patch_size))
+            rnd_h = dY + random.randint(0, max(0, H - self.patch_size))
+            rnd_w = dX + random.randint(0, max(0, W - self.patch_size))
+
+            # Only allow even Y offsets to allow learning interlacing
+            # rnd_h = rnd_h - (rnd_h % 2)
+
             patch_H = img_H[rnd_h:rnd_h + self.patch_size, rnd_w:rnd_w + self.patch_size, :]
+            patch_L = img_L[rnd_h:rnd_h + self.patch_size, rnd_w:rnd_w + self.patch_size, :]
 
             # --------------------------------
             # augmentation - flip, rotate
             # --------------------------------
-            mode = random.randint(0, 7)
-            patch_H = util.augment_img(patch_H, mode=mode)
+            #mode = random.randint(0, 7)
+            #patch_H = util.augment_img(patch_H, mode=mode)
+            #patch_L = util.augment_img(patch_L, mode=mode)
 
             # --------------------------------
             # HWC to CHW, numpy(uint) to tensor
             # --------------------------------
             img_H = util.uint2tensor3(patch_H)
-            img_L = img_H.clone()
-
-            # --------------------------------
-            # add noise
-            # --------------------------------
-            noise = torch.randn(img_L.size()).mul_(self.sigma/255.0)
-            img_L.add_(noise)
+            img_L = util.uint2tensor3(patch_L)
 
         else:
             """
@@ -81,13 +88,7 @@ class DatasetDnCNN(data.Dataset):
             # --------------------------------
             """
             img_H = util.uint2single(img_H)
-            img_L = np.copy(img_H)
-
-            # --------------------------------
-            # add noise
-            # --------------------------------
-            np.random.seed(seed=0)
-            img_L += np.random.normal(0, self.sigma_test/255.0, img_L.shape)
+            img_L = util.uint2single(img_L)
 
             # --------------------------------
             # HWC to CHW, numpy to tensor

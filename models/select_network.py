@@ -34,6 +34,15 @@ def define_G(opt):
                    act_mode=opt_net['act_mode'])
 
     # ----------------------------------------
+    # IRCNN
+    # ----------------------------------------
+    if net_type == 'ircnn':
+        from models.network_dncnn import IRCNN as net
+        netG = net(in_nc=opt_net['in_nc'],
+                   out_nc=opt_net['out_nc'],
+                   nc=opt_net['nc'])
+
+    # ----------------------------------------
     # Flexible DnCNN
     # ----------------------------------------
     elif net_type == 'fdncnn':
